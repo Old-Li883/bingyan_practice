@@ -1,5 +1,6 @@
 from sql_v1.core.field import Field
 import json
+from sql_v1.case import BaseCase
 
 
 class Table():
@@ -25,10 +26,57 @@ class Table():
         返回对应的字段对象
         """
         field = self._get_field(field_name)
-        return field.get_data()  # 调用field对象的方法返回此对象的数据
+        return field.get_data(index)  # 调用field对象的方法返回此对象的数据
+
+    def _get_field_type(self, field_name):
+        field = self._get_field(field_name)  # 获取field对象
+        return field.get_type()
 
     def _parse_conditions(self, **conditions):
-        match_index = range(0, self._rows)
+        # match_index = range(0, self._rows)
+        # return match_index
+        limit = self._rows
+        if 'conditions' in conditions:  # 判断条件是否有条件要选择
+            conditions = conditions['conditions']  # 取出条件
+        if 'limit' in conditions:
+            limit = conditions['limit']
+            conditions.pop('limit')
+        order = 'ASC'
+        if 'order' in conditions:
+            order = 'DESC'
+            conditions.pop('order')
+        if not conditions:  # 如果条件为空，则返回全部索引
+            match_index = [x for x in range(0, limit)]
+        else:
+            name_tmp = self._get_name_tmp(**conditions)  # 返回要查找的字段
+            match_tmp = []  # 存放上一次的索引
+            match_index = []  # 存放所有条件的索引
+            is_first = True  # 是否进行第一次循环
+
+            for field_name in name_tmp:  # 遍历所有的字段名
+                data = self._get_field_data(field_name)  # 获取所有字段数据
+                data_type = self._get_field_type(field_name)
+                case = conditions[field_name]  # 获取对应字段的判断条件，里面包含符号大小
+                if not isinstance(case, BaseCase):  # 如果判断条件在条件类中
+                    raise TypeError('type error')
+                if is_first:  # 如果是第一次循环，就把所有的符合条件的放进去
+                    length = self._get_field(field_name).length()  # 获取字段长度
+                    for index in range(0, length):  # 遍历所有数据索引
+                        if case(data[index], data_type):  # 如果有判断条件，则加入全部索引
+                            match_tmp.append(index)
+                            match_index.append(index)
+                    is_first = False  # 判断标识失败
+                    continue
+                for index in match_tmp:  # 如果不是第一次循环就判断第二个字段相关条件把不符合要求的字段拿出来
+                    if not case(data[index], data_type):
+                        match_index.remove(index)
+                if limit < len(match_index):
+                    for i in range(0, len(match_index) - limit):
+                        match_index.remove()
+                match_tmp = match_index
+        if order == 'DESC':
+            match_index.reverse()
+        # TODO 加索引
         return match_index
 
     def _get_field_length(self, field_name):
@@ -112,7 +160,6 @@ class Table():
                 row = {}
                 for field_name in fields:
                     row[field_name] = self._get_field_data(field_name, index)
-
             else:
                 raise Exception('no this format')
             rows.append(row)
@@ -127,10 +174,11 @@ class Table():
         删除字段
         """
         match_index = self._parse_conditions(**conditions)  # 解析要删除行的索引
-        for field_name in self._field_name:
+        for field_name in self._field_names:
             count = 0  # 当前删除次数
             match_index.sort()  # 排序匹配的索引
-            tmp_index = match_index[0]
+            if len(match_index):
+                tmp_index = match_index[0]
             # 删除了第一个索引后，字段的其他索引都会一次减一，为了表中的index与字段中index相同需要做减法
             for index in match_index:
                 if index > tmp_index:
@@ -139,7 +187,7 @@ class Table():
 
                 count += 1
         self._rows = self._get_field_length(
-            self._field_name[0])  # 表中的长度，与字段的长度要统一
+            self._field_names[0])  # 表中的长度，与字段的长度要统一
 
     def update(self, data, **conditions):
         """
@@ -156,14 +204,15 @@ class Table():
         插入操作
         """
         if 'data' in data:
-            data = data['data']  # 去除data
-        name_tmp = self._get_name_tmp(**data)  # 取出要操作的字段
+            data = data['data']  # 取出data
+        name_tmp = self._get_name_tmp(**data)  # 取出要操作的所有字段
         for field_name in self._field_names:  # 遍历一个表中的所有字段
             value = None  # 先预设value值为None
-            if field_name in name_tmp:  # 如果这个字段是要修改的字段
+            if field_name in name_tmp:  # 如果这个字段是要在插入语句中已经给有的的字段
                 value = data[field_name]  # 就将value赋值给value
             try:
-                self._get_field(field_name).add(value)
+                self._get_field(field_name).add(
+                    value)  # 如果该字段没有在insert语句中定义，就看他是否有默认值，或者是主键
             except Exception as e:
                 # 如果不存在这个字段，抛出异常
                 raise Exception(field_name, str(e))

@@ -30,6 +30,14 @@ class Database():
 
         self._table_objs.pop(table_name, True)
 
+    def get_table(self, index=None):
+        length = len(self._table_names)
+        if isinstance(
+                index, int
+        ) and -index < length > index:  # 连环比较，保证index在范围内（index有可能为负）
+            return self._table_names[index]
+        return self._table_names
+
     def get_table_obj(self, name):
         """
         获取数据表对象
@@ -41,6 +49,11 @@ class Database():
         获取数据库名字
         """
         return self._name
+
+    def add_table(self, table_name, table):
+        if table_name not in self._table_objs:
+            self._table_names.append(table_name)
+            self._table_objs[table_name] = table
 
     def serialized(self):
         """

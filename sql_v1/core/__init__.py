@@ -28,8 +28,8 @@ TYPE_MAP = {
 
 
 class FieldKey(Enum):
-    PRIMARY = 'PRAIMATY KEY'  # 主键
+    PRIMARY = 'PRIMARY_KEY'  # 主键
     INCREMENT = 'AUTO_INCREMENT'  # 自增
     UNIQUE = 'UNIQUE'  # 唯一约束
-    NOT_NULL = 'NOT NULL'  # 非空
+    NOT_NULL = 'NOT_NULL'  # 非空
     NULL = 'NULL'  # 可空
