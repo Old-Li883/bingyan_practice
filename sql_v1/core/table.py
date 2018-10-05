@@ -1,6 +1,7 @@
 from sql_v1.core.field import Field
 import json
 from sql_v1.case import BaseCase
+from sql_v1.core import FieldType
 
 
 class Table():
@@ -8,7 +9,9 @@ class Table():
         self._field_names = []  # 数据表所有字段名
         self._field_objs = {}  # 实现所有字段名与字段对象相映射，前面的字段对象没有名字
         self._rows = 0  # 表的行数
-
+        self._group_fun_map = {  # GROUP分组查询对应的函数映射
+            'COUNT': self._count
+        }
         # 将列名及类的对象加入到表中
         for field_name, field_obj in options.items():
             self.add_field(field_name, field_obj)
@@ -38,6 +41,25 @@ class Table():
         limit = self._rows
         if 'conditions' in conditions:  # 判断条件是否有条件要选择
             conditions = conditions['conditions']  # 取出条件
+        if 'group' in conditions:
+            field = self._field_objs[conditions['group']]
+            data = field.get_data()
+            index = []
+            count = {}
+            for i in range(0, self._rows):
+                if data[i] not in count:
+                    count[data[i]] = 1
+                    index.append(i)
+                else:
+                    count[data[i]] += 1
+            if 'group_condition' in conditions:
+                case = conditions['group_condition']
+                for key, value in count.items():
+                    if not case(value, FieldType('int')):  # ....
+                        for i in index:
+                            if data[i] == key:
+                                index.remove(i)
+            return index  # 选好了返回对应的索引
         if 'limit' in conditions:
             limit = conditions['limit']
             conditions.pop('limit')
@@ -94,6 +116,14 @@ class Table():
             name_tmp.append(field_name)
         return name_tmp
 
+    def _count(self, field, index):
+        count = 0
+        count_value = self._get_field_data(field, index)  # 统计和这个index位置的值一样的个数
+        for i in range(0, self._rows):
+            if count_value == self._get_field_data(field, i):
+                count += 1
+        return count
+
     def add_field(self, field_name, field_obj, value=None):
 
         if field_name in self._field_names:  # 判断字段名是否已经存在
@@ -142,10 +172,11 @@ class Table():
         else:
             # 返回所有要查询的对象
             for field in fields:
-                if field not in self._field_names:
+                if field not in self._field_names and field not in self._group_fun_map:
                     raise Exception("no these fields")
-
         rows = []
+        if 'group' in conditions['conditions']:
+            field = fields[0]  # 要分组的字段在0号位
 
         # 在表的查询中，解析查询条件,返回一个列表包含要的删除的行的索引
         match_index = self._parse_conditions(**conditions)
@@ -159,11 +190,15 @@ class Table():
             elif format_type == 'dict':  # 字段名与字段对象的映射
                 row = {}
                 for field_name in fields:
-                    row[field_name] = self._get_field_data(field_name, index)
+                    if field_name in self._field_names:
+                        row[field_name] = self._get_field_data(
+                            field_name, index)
+                    else:
+                        row[field_name] = self._group_fun_map[field_name](
+                            field, index)
             else:
                 raise Exception('no this format')
             rows.append(row)
-
         if sort == 'DESC':  # 倒序排列索要查找的对象
             rows = rows[::-1]
 

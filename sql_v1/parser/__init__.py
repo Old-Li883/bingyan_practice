@@ -200,6 +200,16 @@ class SQLParser:
 
     def parse(self, statement):
         # tmp_s = statement
+        tmp_group = None
+        if 'group' in statement:
+            statement = statement.split("group")
+            tmp_group = statement[1].strip()
+            tmp_group_condition = None
+            if 'having' in tmp_group:
+                tmp_group = tmp_group.split("having")
+                tmp_group_condition = tmp_group[1].strip()
+                tmp_group = tmp_group[0].strip()
+            statement = statement[0]
         tmp_limit = None
         if 'limit' in statement:
             statement = statement.split("limit")
@@ -255,4 +265,28 @@ class SQLParser:
             action['conditions']['limit'] = tmp_limit
         if tmp_order is not None:
             action['conditions']['order'] = tmp_order
+        if tmp_group is not None:
+            action['conditions']['group'] = tmp_group
+            if tmp_group_condition is not None:
+                conditions = []
+                tmp_group_condition = tmp_group_condition.split(" ")
+                for condition in tmp_group_condition:  # 把二次查询条件加入
+                    conditions.append(condition)  # 把条件变成列表
+                field = conditions[0]
+                symbol = conditions[1].upper()
+                condition = conditions[2]
+                if symbol == 'RANGE':  # 解析range条件
+                    condition_tmp = condition.replace("(", '').replace(
+                        ")", '').split(",")
+                    start = condition_tmp[0]
+                    end = condition_tmp[1]
+                    case = self.SYMBOL_MAP[symbol](start, end)
+                elif symbol == 'IN' or symbol == 'NOT_IN':  # 解析in，not_in条件
+                    condition_tmp = condition.replace("(", '').replace(
+                        ")", '').replace(" ", '').split(",")
+                    condition = condition_tmp
+                    case = self.SYMBOL_MAP[symbol](condition)
+                else:
+                    case = self.SYMBOL_MAP[symbol](condition)  # 返回条件对象
+                action['conditions']['group_condition'] = case
         return action
