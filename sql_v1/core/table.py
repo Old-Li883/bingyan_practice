@@ -159,7 +159,7 @@ class Table():
         else:
             self._rows = field_obj.length()
 
-    def search(self, fields, sort, format_type, **conditions):
+    def search(self, fields, sort='ASC', format_type='dict', **conditions):
         """
         参数：
         要查询的字段对象
@@ -175,8 +175,9 @@ class Table():
                 if field not in self._field_names and field not in self._group_fun_map:
                     raise Exception("no these fields")
         rows = []
-        if 'group' in conditions['conditions']:
-            field = fields[0]  # 要分组的字段在0号位
+        if 'conditions' in conditions:
+            if 'group' in conditions['conditions']:
+                field = fields[0]  # 要分组的字段在0号位
 
         # 在表的查询中，解析查询条件,返回一个列表包含要的删除的行的索引
         match_index = self._parse_conditions(**conditions)
@@ -277,3 +278,6 @@ class Table():
             table_obj.add_field(field_name, field_obj)  # 将字段加入表中
 
         return table_obj
+
+    def len(self):
+        return self._rows

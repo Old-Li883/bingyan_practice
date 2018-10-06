@@ -27,7 +27,11 @@ class SQLParser:
             'EXIT': self._exit,
             'QUIT': self._exit,
             'SHOW': self._show,
-            'DROP': self._drop
+            'DROP': self._drop,
+            'CHANGE': self._change,
+            'BEGIN': self._begin,
+            'COMMIT': self._commit,
+            'ROLLBACK': self._rollback
         }
         self.SYMBOL_MAP = {
             'IN': InCase,
@@ -178,6 +182,15 @@ class SQLParser:
     def _exit(self, _):
         return {'type': 'exit'}
 
+    def _commit(self, _):
+        return {'type': 'commit'}
+
+    def _rollback(self, _):
+        return {'type': 'rollback'}
+
+    def _begin(self, _):
+        return {'type': 'begin'}
+
     def _show(self, statement):
         """
         查看数据
@@ -197,6 +210,9 @@ class SQLParser:
             return {'type': 'drop', 'kind': 'database', 'name': statement[2]}
         if kind.upper() == 'TABLE':
             return {'type': 'drop', 'kind': 'table', 'name': statement[2]}
+
+    def _change(self, statement):
+        return {'type': 'change', 'user': statement[1]}
 
     def parse(self, statement):
         # tmp_s = statement
@@ -228,7 +244,7 @@ class SQLParser:
         bases_statement = self._filter_space(
             statement[0].split(" "))  # 把多余的空格去掉
         if len(bases_statement) < 2 and bases_statement[0] not in [
-                'exit', 'quit'
+                'exit', 'quit', 'begin', 'commit', 'rollback'
         ]:
             raise Exception('syntax error')  # 语句太少（小于1句）报错
         action_type = bases_statement[0].upper()  # 转换为大写字母

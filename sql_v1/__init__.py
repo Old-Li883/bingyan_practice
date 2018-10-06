@@ -10,8 +10,9 @@ from sql_v1.parser import SQLParser
 import prettytable  # 画表的库
 from sql_v1.core.field import Field, FieldKey, FieldType
 
-
 # 为了不明文保存转码保存
+
+
 def _decode_db(content):
     content = base64.decodebytes(content)
     return content.decode()[::-1]
@@ -23,15 +24,22 @@ def _encode_db(content):
 
 
 class Engine:
-    def __init__(self, db_name=None, format_type='dict', path='db.data'):
+    def __init__(self, user, db_name=None, format_type='dict'):
         self._database_objs = {}  # 创建数据库与数据库引擎映射表
         self._database_names = []  # 数据库名字集合
         self._current_db = None  # 选择当前使用的数据库
         self._format_type = format_type  # 确定数据返回格式（数据默认返回格式为dict）
+        self._user = user
+        self.path = self._user + ".data"
+        if self._user == 'root':
+            self.root_flag = 1
+        else:
+            self.root_flag = 0
         if db_name is not None:
             self.select_db(db_name)
-        self.path = path
         self._load_databases()
+        if self._user == 'root':
+            self.select_db('user')
         self._action_map = {  # 方法映射
             'create': self._create,
             'insert': self._insert,
@@ -41,7 +49,11 @@ class Engine:
             'drop': self._drop,
             'show': self._show,
             'use': self._use,
-            'exit': self._exit
+            'exit': self._exit,
+            'change': self._change,
+            'commit': self._commit,
+            'begin': self._begin,
+            'rollback': self._rollback
         }
 
     def _dump_databases(self):  # 存储数据到本地
@@ -136,6 +148,40 @@ class Engine:
     def _exit(self, _):
         return 'exit'
 
+    def _commit(self, _):
+        return 'commit'
+
+    def _begin(self, _):
+        return 'begin'
+
+    def _rollback(self, _):
+        return 'rollback'
+
+    def _change(self, action):
+        user = action['user']
+        if self._user == 'root':
+            if self.root_flag == 1:
+                self.table = self._current_db.get_table_obj('user')
+                user_flag = 0
+                self.users = self.table.search([
+                    'u_name',
+                ])
+                self.root_flag = 0
+            for i in range(self.table.len()):
+                if user in self.users[i]['u_name']:
+                    user_flag = 1
+            if user_flag == 0:
+                raise Exception("this user has not been exist")
+            self._database_names = []
+            self._database_objs = {}
+            self._current_db = None
+            self.path = user + ".data"
+            self._load_databases()
+            if user == 'root':
+                self.select_db('user')
+        else:
+            return {"type": "change", "user": user}
+
     def create_database(self, database_name):
         if database_name in self._database_objs:
             raise Exception('database has exist')
@@ -144,18 +190,20 @@ class Engine:
             database_name)  # 数据库呢名与对象的映射
 
     def drop_database(self, database_name):
-        if database_name not in self._database_objs:
-            raise Exception('database is not existed')
-        self._database_names.remove(database_name)
-        self._database_objs.pop(database_name, True)
+        if self._user != 'root':
+            if database_name not in self._database_objs:
+                raise Exception('database is not existed')
+            self._database_names.remove(database_name)
+            self._database_objs.pop(database_name, True)
 
     def drop_table(self, table_name):
-        self._check_is_choose()
-        self._current_db.drop_tables(table_name)
+        if self._user != 'root':
+            self._check_is_choose()
+            self._current_db.drop_tables(table_name)
 
     def select_db(self, db_name):
         if db_name not in self._database_objs:
-            raise Exception('this database has been existed')
+            raise Exception('this database has not been existed')
         self._current_db = self._database_objs[db_name]
 
     def serialized(self):
@@ -185,6 +233,9 @@ class Engine:
             **conditions)
 
     def insert(self, table_name, **data):
+        if self._user == 'root' and self.path == 'root.data':
+            text_name = data['data']['u_name'] + '.data'
+            os.system("touch " + text_name)
         return self._get_table(table_name).insert(**data)  # 调用table类暴露的方法
 
     def update(self, table_name, data, **conditions):
@@ -224,18 +275,34 @@ class Engine:
             tables = tmp
         return tables
 
+    def get_database_obj(self, name):
+        return self._database_objs[name]
+
     def execute(self, statement):
+        global autocommit
         action = SQLParser().parse(statement)  # 全部的处理条件
         ret = None
         if action['type'] in self._action_map:
             ret = self._action_map.get(action['type'])(action)  # 执行第一个单词对应的函数
-            if action['type'] in [
-                    'insert', 'update', 'delete', 'create', 'drop'
-            ]:
-                self.commit()  # 自动提交
-            return ret
+            if autocommit == 1:
+                if action['type'] in [
+                        'insert', 'update', 'delete', 'create', 'drop'
+                ]:
+                    self.commit()  # 自动提交
+            if ret == 'begin':
+                autocommit = 0
+            if ret == 'commit':
+                self.commit()
+                autocommit = 1
+            if ret == 'rollback':
+                self._database_names = []
+                self._database_objs = {}
+                self._load_databases()
+        return ret
 
     def run(self):
+        global autocommit
+        autocommit = 1
         while True:
             statement = input('sql>')
             try:
@@ -243,7 +310,9 @@ class Engine:
                 if ret in ['exit', 'quit']:
                     print('bye')
                     return
-                if ret:
+                if isinstance(ret, dict):
+                    return ret['user']  # 切换用户
+                if ret not in ['begin', 'commit', 'rollback'] and ret:
                     pt = prettytable.PrettyTable(ret[0].keys())
                     pt.align = 'l'
                     for line in ret:
@@ -252,3 +321,8 @@ class Engine:
                     print(pt)
             except Exception as exc:
                 print(str(exc))
+                if autocommit == 0:
+                    # 查事务日志的输出
+                    self._database_names = []
+                    self._database_objs = {}
+                    self._load_databases()
