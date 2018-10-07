@@ -10,7 +10,7 @@ from sql_v1.parser import SQLParser
 import prettytable  # 画表的库
 from sql_v1.core.field import Field, FieldKey, FieldType
 from sql_v1.case import IsCase
-from user import Client
+from sql_v1.log import Log
 
 # 为了不明文保存转码保存
 
@@ -248,11 +248,10 @@ class Engine:
             database_name)  # 数据库呢名与对象的映射
 
     def drop_database(self, database_name):
-        if self._user.name != 'root':
-            if database_name not in self._database_objs:
-                raise Exception('database is not existed')
-            self._database_names.remove(database_name)
-            self._database_objs.pop(database_name, True)
+        if database_name not in self._database_objs:
+            raise Exception('database is not existed')
+        self._database_names.remove(database_name)
+        self._database_objs.pop(database_name, True)
 
     def drop_table(self, table_name):
         if self._user.name != 'root':
@@ -281,6 +280,8 @@ class Engine:
         self._dump_databases()  # 提交就保存数据
 
     def rollback(self):
+        self._database_names = []
+        self._database_objs = {}
         self._load_databases()  # 回滚就重新加载，原来内存的东西就会初始化为原来的值
 
     def search(self, table_name, fields='*', sort='ASC', **conditions):
@@ -345,10 +346,29 @@ class Engine:
         )
         self.execute(statement)
 
+    def logging(self, action, statement, user):
+        log = Log()
+        if action['type'] in ['create', 'insert', 'delete', 'drop']:
+            log.write("%s: %s" % (
+                user,
+                statement,
+            ))
+        elif action['type'] == 'update':
+            table = action['table']
+            fields = action['fields']
+            conditions = action['conditions']
+            data = self.search(table, fields=fields, conditions=conditions)
+            log.write("%s: statement original data is %s" % (
+                user,
+                data,
+            ))
+
     def execute(self, statement):
         global autocommit
         action = SQLParser().parse(statement)  # 全部的处理条件
         ret = None
+        if autocommit == 0:
+            self.logging(action, statement, self._user.name)  # 开始事务记录日志
         if action['type'] not in self._user.grant:
             raise Exception("sorry this user can not operate " +
                             action['type'])
@@ -365,9 +385,7 @@ class Engine:
                 self.commit()
                 autocommit = 1
             if ret == 'rollback':
-                self._database_names = []
-                self._database_objs = {}
-                self._load_databases()
+                self.rollback()
         return ret
 
     def run(self):
@@ -392,7 +410,11 @@ class Engine:
             except Exception as exc:
                 print(str(exc))
                 if autocommit == 0:
-                    # 查事务日志的输出
-                    self._database_names = []
-                    self._database_objs = {}
-                    self._load_databases()
+                    log = Log()
+                    log.write(
+                        'error', "%s : %s,%s" % (
+                            self._user.name,
+                            statement,
+                            exc,
+                        ))
+                    self.rollback()
