@@ -1,4 +1,5 @@
 from sql_v1 import Engine
+from user import Client
 
 
 def run(user):
@@ -7,4 +8,5 @@ def run(user):
 
 
 if __name__ == '__main__':
-    run('root')
+    root = Client('root', '123456')
+    run(root)

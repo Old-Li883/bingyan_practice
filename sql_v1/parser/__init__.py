@@ -15,7 +15,11 @@ class SQLParser:
             'CREATE_T':
             r"(CREATE|create) (TABLE|table) (.*) (.*)",
             'CREATE_D':
-            r"(CREATE|create) (DATABASE|database) (.*)"
+            r"(CREATE|create) (DATABASE|database) (.*)",
+            "SELECT_D":
+            r"(SELECT|select) (.*) (FROM|from) (.*) (inner join|left join|right join) (.*) (on) (.*)",
+            "GRANT":
+            r"(GRANT|grant) (.*) (ON|on) (.*)"
         }
         self._action_map = {
             'CREATE': self._create,
@@ -31,7 +35,8 @@ class SQLParser:
             'CHANGE': self._change,
             'BEGIN': self._begin,
             'COMMIT': self._commit,
-            'ROLLBACK': self._rollback
+            'ROLLBACK': self._rollback,
+            'GRANT': self._grant
         }
         self.SYMBOL_MAP = {
             'IN': InCase,
@@ -66,7 +71,10 @@ class SQLParser:
     """
 
     def _select(self, statement):
-        comp = self._get_comp('SELECT')
+        if 'on' in statement:
+            comp = self._get_comp('SELECT_D')
+        else:
+            comp = self._get_comp('SELECT')
         ret = comp.findall(" ".join(statement))
         if ret and len(ret[0]) == 4:
             fields = ret[0][1].strip()
@@ -74,6 +82,34 @@ class SQLParser:
             if fields != '*':
                 fields = [field.strip() for field in fields.split(",")]
             return {'type': 'search', 'fields': fields, 'table': table}
+        if ret and len(ret[0]) == 8:
+            tmp = ret[0][1]
+            tmp = tmp.split(",")
+            fields = {}
+            for field in tmp:
+                field = field.split(".")
+                if field[0].strip() not in fields:
+                    fields[field[0].strip()] = []
+                fields[field[0].strip()].append(field[1].strip())
+            table = [ret[0][3], ret[0][5]]
+            condition = ret[0][7]
+            condition = condition.split(" ")
+            conditions = {}
+            for field in condition:
+                field = field.split(".")
+                if len(field) == 2:
+                    if field[0].strip() not in conditions:
+                        conditions[field[0].strip()] = []
+                    conditions[field[0].strip()].append(field[1].strip())
+                else:
+                    conditions['symbol'] = field[0]
+            return {
+                'type': 'select_d',
+                'fields': fields,
+                'table': table,
+                'condition': conditions,
+                'way': ret[0][4]
+            }
         return None
 
     def _update(self, statement):
@@ -94,7 +130,7 @@ class SQLParser:
                     try:
                         value = int(value.strip())
                     except Exception as e:
-                        return None
+                        value = str(value.strip())
                 data['data'][field] = value  # 加入要修改的数据
             return data
         return None
@@ -126,10 +162,16 @@ class SQLParser:
                     try:
                         value = int(value.strip())
                     except Exception as e:
-                        return None
+                        value = str(value.strip())
                 data['data'][field] = value
             return data
         return None
+
+    def _grant(self, statment):
+        comp = self._get_comp('GRANT')
+        ret = comp.findall(" ".join(statment))
+        if ret and len(ret[0]) == 4:
+            return {'type': 'grant', 'grant': ret[0][1], 'user': ret[0][3]}
 
     def _create(self, statement):
         if statement[1] == 'table':

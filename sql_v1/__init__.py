@@ -9,6 +9,8 @@ import os
 from sql_v1.parser import SQLParser
 import prettytable  # 画表的库
 from sql_v1.core.field import Field, FieldKey, FieldType
+from sql_v1.case import IsCase
+from user import Client
 
 # 为了不明文保存转码保存
 
@@ -30,15 +32,15 @@ class Engine:
         self._current_db = None  # 选择当前使用的数据库
         self._format_type = format_type  # 确定数据返回格式（数据默认返回格式为dict）
         self._user = user
-        self.path = self._user + ".data"
-        if self._user == 'root':
+        self.path = self._user.name + ".data"
+        if self._user.name == 'root':
             self.root_flag = 1
         else:
             self.root_flag = 0
         if db_name is not None:
             self.select_db(db_name)
         self._load_databases()
-        if self._user == 'root':
+        if self._user.name == 'root':
             self.select_db('user')
         self._action_map = {  # 方法映射
             'create': self._create,
@@ -53,7 +55,9 @@ class Engine:
             'change': self._change,
             'commit': self._commit,
             'begin': self._begin,
-            'rollback': self._rollback
+            'rollback': self._rollback,
+            'select_d': self._search_d,
+            'grant': self._grant
         }
 
     def _dump_databases(self):  # 存储数据到本地
@@ -132,6 +136,55 @@ class Engine:
         conditions = action['conditions']
         return self.search(table, fields=fields, conditions=conditions)
 
+    def _search_d(self, action):
+        table = action['table']
+        fields = action['fields']
+        conditions = action['condition']
+        result1 = []
+        condition = {}
+        if action['way'] != 'left join':
+            for i in self.search(
+                    table[1], fields=conditions[table[1]], conditions={}):
+                case = IsCase(i[conditions[table[1]][0]])
+
+                condition = {conditions[table[0]][0]: case}
+                result = self.search(
+                    table[0], fields=fields[table[0]], conditions=condition)
+                if result:
+                    result1.append(result[0])
+                elif action['way'] == 'right join':
+                    tmp = {}
+                    for field in fields[table[0]]:
+                        tmp.update({field: 'NONE'})
+                    result1.append(tmp)
+        else:
+            result1 = self.search(
+                table[0], fields=fields[table[0]], conditions={})
+        result2 = []
+        if action['way'] != 'right join':
+            for i in self.search(
+                    table[0], fields=conditions[table[0]], conditions={}):
+                case = IsCase(i[conditions[table[0]][0]])
+                if action['way'] != 'right join':
+                    condition = {conditions[table[1]][0]: case}
+                result = self.search(
+                    table[1], fields=fields[table[1]], conditions=condition)
+                if result:
+                    result2.append(result[0])
+                elif action['way'] == 'left join':
+                    tmp = {}
+                    for field in fields[table[1]]:
+                        tmp.update({field: 'NONE'})
+                    result2.append(tmp)
+        else:
+            result2 = self.search(
+                table[1], fields=fields[table[1]], conditions={})
+        result = []
+        for i in range(len(result2)):
+            result.append({**result1[i], **result2[i]})
+
+        return result
+
     def _drop(self, action):
         if action['kind'] == 'database':
             return self.drop_database(action['name'])
@@ -159,7 +212,7 @@ class Engine:
 
     def _change(self, action):
         user = action['user']
-        if self._user == 'root':
+        if self._user.name == 'root':
             if self.root_flag == 1:
                 self.table = self._current_db.get_table_obj('user')
                 user_flag = 0
@@ -182,6 +235,11 @@ class Engine:
         else:
             return {"type": "change", "user": user}
 
+    def _grant(self, action):
+        grant = action['grant']
+        user = action['user']
+        return self.grant(user, grant)
+
     def create_database(self, database_name):
         if database_name in self._database_objs:
             raise Exception('database has exist')
@@ -190,14 +248,14 @@ class Engine:
             database_name)  # 数据库呢名与对象的映射
 
     def drop_database(self, database_name):
-        if self._user != 'root':
+        if self._user.name != 'root':
             if database_name not in self._database_objs:
                 raise Exception('database is not existed')
             self._database_names.remove(database_name)
             self._database_objs.pop(database_name, True)
 
     def drop_table(self, table_name):
-        if self._user != 'root':
+        if self._user.name != 'root':
             self._check_is_choose()
             self._current_db.drop_tables(table_name)
 
@@ -233,7 +291,7 @@ class Engine:
             **conditions)
 
     def insert(self, table_name, **data):
-        if self._user == 'root' and self.path == 'root.data':
+        if self._user.name == 'root' and self.path == 'root.data':
             text_name = data['data']['u_name'] + '.data'
             os.system("touch " + text_name)
         return self._get_table(table_name).insert(**data)  # 调用table类暴露的方法
@@ -278,10 +336,22 @@ class Engine:
     def get_database_obj(self, name):
         return self._database_objs[name]
 
+    def grant(self, user, grant):
+        if self._user.name != 'root':
+            raise Exception("only root can operate grant")
+        statement = "update user set grant = %s where u_name = %s" % (
+            grant,
+            user,
+        )
+        self.execute(statement)
+
     def execute(self, statement):
         global autocommit
         action = SQLParser().parse(statement)  # 全部的处理条件
         ret = None
+        if action['type'] not in self._user.grant:
+            raise Exception("sorry this user can not operate " +
+                            action['type'])
         if action['type'] in self._action_map:
             ret = self._action_map.get(action['type'])(action)  # 执行第一个单词对应的函数
             if autocommit == 1:
