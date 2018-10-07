@@ -21,7 +21,7 @@ class Table():
         用这个字段名，找到其所映射的字段对象
         """
         if field_name not in self._field_names:
-            raise Exception('no this field')
+            raise Exception('No this field')
         return self._field_objs[field_name]
 
     def _get_field_data(self, field_name, index=None):
@@ -80,7 +80,7 @@ class Table():
                 data_type = self._get_field_type(field_name)
                 case = conditions[field_name]  # 获取对应字段的判断条件，里面包含符号大小
                 if not isinstance(case, BaseCase):  # 如果判断条件在条件类中
-                    raise TypeError('type error')
+                    raise TypeError('Type error')
                 if is_first:  # 如果是第一次循环，就把所有的符合条件的放进去
                     length = self._get_field(field_name).length()  # 获取字段长度
                     for index in range(0, length):  # 遍历所有数据索引
@@ -92,9 +92,9 @@ class Table():
                 for index in match_tmp:  # 如果不是第一次循环就判断第二个字段相关条件把不符合要求的字段拿出来
                     if not case(data[index], data_type):
                         match_index.remove(index)
-                if limit < len(match_index):
-                    for i in range(0, len(match_index) - limit):
-                        match_index.remove()
+            if limit < len(match_index):
+                for i in range(0, len(match_index) - limit):
+                    match_index.pop()
                 match_tmp = match_index
         if order == 'DESC':
             match_index.reverse()
@@ -112,7 +112,7 @@ class Table():
 
         for field_name in params.keys():
             if field_name not in self._field_names:  # 看要找的字段在不在已有字段内
-                raise Exception('no this field')
+                raise Exception('No this field')
             name_tmp.append(field_name)
         return name_tmp
 
@@ -130,7 +130,7 @@ class Table():
             raise Exception('Field Exists')
 
         if not isinstance(field_obj, Field):
-            raise TypeError('no this type of field')
+            raise TypeError('No this type of field')
 
         self._field_names.append(field_name)
 
@@ -146,7 +146,7 @@ class Table():
             if field_obj_length != 0:
                 if field_obj_length == length:
                     return
-                raise Exception('field data length is not equal')
+                raise Exception('Field data length is not equal')
 
             for index in range(0, length):
                 if value:
@@ -173,7 +173,7 @@ class Table():
             # 返回所有要查询的对象
             for field in fields:
                 if field not in self._field_names and field not in self._group_fun_map:
-                    raise Exception("no these fields")
+                    raise Exception("No these fields")
         rows = []
         if 'conditions' in conditions:
             if 'group' in conditions['conditions']:
@@ -198,7 +198,7 @@ class Table():
                         row[field_name] = self._group_fun_map[field_name](
                             field, index)
             else:
-                raise Exception('no this format')
+                raise Exception('No this format')
             rows.append(row)
         if sort == 'DESC':  # 倒序排列索要查找的对象
             rows = rows[::-1]
@@ -251,7 +251,7 @@ class Table():
                     value)  # 如果该字段没有在insert语句中定义，就看他是否有默认值，或者是主键
             except Exception as e:
                 # 如果不存在这个字段，抛出异常
-                raise Exception(field_name, str(e))
+                raise Exception(str(e))
         self._rows += 1
 
     def serialized(self):

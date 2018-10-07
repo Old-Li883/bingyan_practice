@@ -82,7 +82,7 @@ class Engine:
         table = self._current_db.get_table_obj(table_name)  # 获取当前table对象
 
         if table is None:
-            raise Exception('this table has not existed')
+            raise Exception('Table  %s has not existed' (table, ))
 
         return table
 
@@ -91,7 +91,7 @@ class Engine:
         判断当前有没有选择数据库
         """
         if not self._current_db or not isinstance(self._current_db, Database):
-            raise Exception('no any database choose')
+            raise Exception('No any database is choosed')
 
     def _create(self, action):
         kind = action['kind']
@@ -101,9 +101,9 @@ class Engine:
             field = {}
             for key in data:
                 if isinstance(data[key], list):  # 获取要创建的字段及数据
-                    if data[key][1].upper() == 'NONE':  # 这个位置装的是默认值
+                    if data[key][1] == 'NONE':  # 这个位置装的是默认值
                         data[key][1] = None
-                    if data[key][2] == []:  # 这个位置装的是键值
+                    if data[key][2] == 'NONE':  # 这个位置装的是键值
                         data[key][2] = FieldKey.NULL
                     field[key] = Field(
                         FieldType(data[key][0]), data[key][2], data[key][1])
@@ -137,6 +137,9 @@ class Engine:
         return self.search(table, fields=fields, conditions=conditions)
 
     def _search_d(self, action):
+        """
+        二次查询
+        """
         table = action['table']
         fields = action['fields']
         conditions = action['condition']
@@ -224,7 +227,7 @@ class Engine:
                 if user in self.users[i]['u_name']:
                     user_flag = 1
             if user_flag == 0:
-                raise Exception("this user has not been exist")
+                raise Exception("User %s has not been exist" % (user, ))
             self._database_names = []
             self._database_objs = {}
             self._current_db = None
@@ -242,25 +245,24 @@ class Engine:
 
     def create_database(self, database_name):
         if database_name in self._database_objs:
-            raise Exception('database has exist')
+            raise Exception('Database %s has exist' % (database_name, ))
         self._database_names.append(database_name)  # 加数据库名字
         self._database_objs[database_name] = Database(
             database_name)  # 数据库呢名与对象的映射
 
     def drop_database(self, database_name):
         if database_name not in self._database_objs:
-            raise Exception('database is not existed')
+            raise Exception('Database %s is not existed' % (database_name, ))
         self._database_names.remove(database_name)
         self._database_objs.pop(database_name, True)
 
     def drop_table(self, table_name):
-        if self._user.name != 'root':
-            self._check_is_choose()
-            self._current_db.drop_tables(table_name)
+        self._check_is_choose()
+        self._current_db.drop_tables(table_name)
 
     def select_db(self, db_name):
         if db_name not in self._database_objs:
-            raise Exception('this database has not been existed')
+            raise Exception('Database %s has not  existed' % (db_name, ))
         self._current_db = self._database_objs[db_name]
 
     def serialized(self):
@@ -339,7 +341,7 @@ class Engine:
 
     def grant(self, user, grant):
         if self._user.name != 'root':
-            raise Exception("only root can operate grant")
+            raise Exception("Only root can operate grant")
         statement = "update user set grant = %s where u_name = %s" % (
             grant,
             user,
@@ -412,9 +414,11 @@ class Engine:
                 if autocommit == 0:
                     log = Log()
                     log.write(
-                        'error', "%s : %s,%s" % (
+                        "%s : %s,   %s" % (
                             self._user.name,
                             statement,
                             exc,
-                        ))
+                        ),
+                        'error',
+                    )
                     self.rollback()

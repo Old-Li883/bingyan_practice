@@ -1,5 +1,5 @@
 import re
-from sql_v1.case import *
+from sql_v1.case import IsCase, IsNotCase, InCase, NotInCase, GreaterCase, LessCase, GAECase, LAECase, LikeCase, RangeCase
 from sql_v1.core import FieldKey
 
 

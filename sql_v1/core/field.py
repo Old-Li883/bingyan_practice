@@ -19,18 +19,18 @@ class Field():
             self._keys = [self._keys]
 
         if not isinstance(self._type, FieldType):  # 判断传来的字段类型是否在规定的字段类型内
-            raise TypeError("data-type is not in fieldtype")
+            raise TypeError("Data-type is not in fieldtype")
 
         for key in self._keys:
             if not isinstance(key, FieldKey):  # 判断键类型是否在规定的键内
-                raise TypeError('data-type is not in fieldkey')
+                raise TypeError('Data-type is not in fieldkey')
 
         if FieldKey.INCREMENT in self._keys:  # 自增类型一定要为整型
             if self._type != FieldType.INT:
                 raise TypeError('Increment key must be int')
 
-            # if FieldKey.PRIMARY not in self._keys:  # 主键一定需要
-                # raise Exception('Primary key must be needed')
+            if FieldKey.PRIMARY not in self._keys:  # 主键一定需要
+                raise Exception('Primary key must be needed')
 
         if self._default is not None and FieldKey.UNIQUE in self._keys:  # 唯一约束值不能为默认
             raise Exception('Unique key must be not default value')
@@ -41,14 +41,14 @@ class Field():
         """
         if value is not None and not isinstance(value,
                                                 TYPE_MAP[self._type.value]):
-            raise TypeError('data type error')
+            raise TypeError('Data type error')
 
     def _check_index(self, index):
         """
         查看该元素是在里面
         """
         if not isinstance(index, int) or not index < self._rows:
-            raise Exception('not this element')
+            raise Exception('Not this element')
 
         return True
 
@@ -61,15 +61,15 @@ class Field():
                 value = self._rows + 1  # 自增类型加一
 
             if value in self._value:  # 自增类型的值重复则抛出异常
-                raise Exception('value is in')
+                raise Exception('Value is in')
 
         if FieldKey.PRIMARY in self._keys or FieldKey.UNIQUE in self._keys:
             if value in self._value:  # 主键和唯一键，判断插入的值是否重复
-                raise Exception('value is in')
+                raise Exception('Value is in')
 
-        if (FieldKey.PRIMARY in self._keys
-                or FieldKey.NOT_NULL in self._keys) and value is None:  # 主键和not_null值不能为空
-            raise Exception('value must be not null')
+        if (FieldKey.PRIMARY in self._keys or FieldKey.NOT_NULL in self._keys
+            ) and value is None:  # 主键和not_null值不能为空
+            raise Exception('Value must be not null')
 
         return value
 
@@ -137,7 +137,9 @@ class Field():
         keys = [FieldKey(key) for key in json_data['key']]  # 转化成FieldKey中的属性
         # 将json对象转化为一个Field对象，初始化一列
         obj = Field(
-            FieldType(json_data['type']), keys, default=json_data['default'])
+            FieldType(json_data['type']),
+            keys=keys,
+            default=json_data['default'])
 
         for value in json_data['values']:
             obj.add(value)

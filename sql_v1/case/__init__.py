@@ -42,7 +42,7 @@ def _like(data, condition):
     if length == 3:
         condition = tmp[1]
     elif length == 2:
-        raise Exception('syntax error')
+        raise Exception('Syntax error')
     elif length == 1:
         condition = tmp[0]
     return condition in data  # 看一下解析条件是否在数据里面
@@ -144,6 +144,6 @@ class RangeCase(BaseCase):
 
     def __call__(self, data, data_type):
         if not isinstance(self.condition, tuple):
-            raise TypeError('type error')
+            raise TypeError('Type error')
 
         return SYMBOL_MAP[self.symbol](data, self.condition)

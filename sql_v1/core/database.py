@@ -13,7 +13,7 @@ class Database():
         创建数据表
         """
         if table_name in self._table_objs:  # 判断该数据库是否已经存在
-            raise Exception('this table has existed')
+            raise Exception('This table has existed')
 
         self._table_names.append(table_name)
 
@@ -24,7 +24,7 @@ class Database():
         删除对应的表
         """
         if table_name not in self._table_names:
-            raise Exception('table is not exist')
+            raise Exception('Table is not existed')
 
         self._table_names.remove(table_name)
 

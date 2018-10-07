@@ -16,6 +16,7 @@ while True:
         user = input("please choose user:")
     if user not in data:
         print("no this user")
+        user = None
     else:
         flag = 0
         grant = data[user + 'grant']
@@ -24,7 +25,7 @@ while True:
         else:
             user = Client(user, data[user], grant)
         while True:
-            pwd = input("password:(p re-choose user)")
+            pwd = input("password:(Press p re-choose user)")
             if pwd != user.pwd:
                 print("password wrong")
             else:
